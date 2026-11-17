@@ -1,0 +1,133 @@
+{
+  "info": {
+    "name": "PayFlex Integration Tests",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Health Check",
+      "request": {
+        "method": "GET",
+        "url": "http://localhost:8000/health"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Health check returns 200', function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "pm.test('API is healthy', function () {",
+              "    pm.expect(pm.response.json().status).to.eql('healthy');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Get Balance",
+      "request": {
+        "method": "GET",
+        "url": "http://localhost:8000/accounts/123/balance"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Balance returns 200', function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "pm.test('Initial balance is 1000', function () {",
+              "    pm.expect(pm.response.json().balance).to.eql(1000);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Make Payment",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"account_id\": \"123\",\n  \"amount\": 100\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": "http://localhost:8000/payments"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Payment successful', function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "pm.test('Remaining balance is 900', function () {",
+              "    pm.expect(pm.response.json().remaining_balance).to.eql(900);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Verify balance after payment",
+      "request": {
+        "method": "GET",
+        "url": "http://localhost:8000/accounts/123/balance"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Balance updated correctly', function () {",
+              "    pm.response.to.have.status(200);",
+              "    pm.expect(pm.response.json().balance).to.eql(900);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Unknown account",
+      "request": {
+        "method": "GET",
+        "url": "http://localhost:8000/accounts/999/balance"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Unknown account returns 404', function () {",
+              "    pm.response.to.have.status(404);",
+              "});"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}
