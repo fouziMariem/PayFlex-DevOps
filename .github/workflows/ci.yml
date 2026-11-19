@@ -101,7 +101,7 @@ jobs:
           docker run --rm \
             --network host \
             -v "${{ github.workspace }}/performance:/scripts" \
-            grafana/k6:latest run /scripts/load_test.js
+            grafana/k6:latest run /scripts/load_test_failure.js
 
       - name: Report performance warning
         if: steps.k6.outcome == 'failure'
