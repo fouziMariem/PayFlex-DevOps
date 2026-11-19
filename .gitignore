@@ -1,6 +1,32 @@
-venv/
-__pycache__/
+# Python
+*.py[cod]
 .pytest_cache/
+__pycache__/
+
+# Environnements virtuels
+venv/
+.venv/
+
+# Node.js
+node_modules/
+
+# Tests et couverture
+.coverage
+.coverage.*
 htmlcov/
-.git/
+
+# Environnement et secrets
 .env
+.env.*
+!.env.example
+
+# Rapports générés
+reports/
+
+# IDE
+.vscode/
+.idea/
+
+# Système
+.DS_Store
+Thumbs.db

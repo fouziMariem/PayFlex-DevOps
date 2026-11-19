@@ -1,14 +1,21 @@
 {
   "info": {
-    "name": "PayFlex Integration Tests",
+    "name": "PayFlex API Integration Tests",
+    "description": "Tests d'intégration HTTP de l'API PayFlex",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8000"
+    }
+  ],
   "item": [
     {
-      "name": "Health Check",
+      "name": "1 - Home endpoint",
       "request": {
         "method": "GET",
-        "url": "http://localhost:8000/health"
+        "url": "{{baseUrl}}/"
       },
       "event": [
         {
@@ -16,7 +23,30 @@
           "script": {
             "type": "text/javascript",
             "exec": [
-              "pm.test('Health check returns 200', function () {",
+              "pm.test('Status code is 200', function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "pm.test('Welcome message is correct', function () {",
+              "    pm.expect(pm.response.json().message).to.eql('Welcome to PayFlex API');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "2 - Health endpoint",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/health"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status code is 200', function () {",
               "    pm.response.to.have.status(200);",
               "});",
               "pm.test('API is healthy', function () {",
@@ -28,10 +58,10 @@
       ]
     },
     {
-      "name": "Get Balance",
+      "name": "3 - Get account balance",
       "request": {
         "method": "GET",
-        "url": "http://localhost:8000/accounts/123/balance"
+        "url": "{{baseUrl}}/accounts/123/balance"
       },
       "event": [
         {
@@ -39,7 +69,7 @@
           "script": {
             "type": "text/javascript",
             "exec": [
-              "pm.test('Balance returns 200', function () {",
+              "pm.test('Status code is 200', function () {",
               "    pm.response.to.have.status(200);",
               "});",
               "pm.test('Initial balance is 1000', function () {",
@@ -51,7 +81,27 @@
       ]
     },
     {
-      "name": "Make Payment",
+      "name": "4 - Unknown account",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/accounts/999/balance"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Unknown account returns 404', function () {",
+              "    pm.response.to.have.status(404);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "5 - Insufficient balance",
       "request": {
         "method": "POST",
         "header": [
@@ -62,14 +112,9 @@
         ],
         "body": {
           "mode": "raw",
-          "raw": "{\n  \"account_id\": \"123\",\n  \"amount\": 100\n}",
-          "options": {
-            "raw": {
-              "language": "json"
-            }
-          }
+          "raw": "{\"account_id\":\"123\",\"amount\":2000}"
         },
-        "url": "http://localhost:8000/payments"
+        "url": "{{baseUrl}}/payments"
       },
       "event": [
         {
@@ -77,7 +122,40 @@
           "script": {
             "type": "text/javascript",
             "exec": [
-              "pm.test('Payment successful', function () {",
+              "pm.test('Insufficient balance returns 400', function () {",
+              "    pm.response.to.have.status(400);",
+              "});",
+              "pm.test('Error message is correct', function () {",
+              "    pm.expect(pm.response.json().detail).to.eql('Insufficient balance');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "6 - Successful payment",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\"account_id\":\"123\",\"amount\":100}"
+        },
+        "url": "{{baseUrl}}/payments"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Payment succeeds with status 200', function () {",
               "    pm.response.to.have.status(200);",
               "});",
               "pm.test('Remaining balance is 900', function () {",
@@ -89,10 +167,10 @@
       ]
     },
     {
-      "name": "Verify balance after payment",
+      "name": "7 - Verify updated balance",
       "request": {
         "method": "GET",
-        "url": "http://localhost:8000/accounts/123/balance"
+        "url": "{{baseUrl}}/accounts/123/balance"
       },
       "event": [
         {
@@ -100,29 +178,9 @@
           "script": {
             "type": "text/javascript",
             "exec": [
-              "pm.test('Balance updated correctly', function () {",
+              "pm.test('Updated balance is 900', function () {",
               "    pm.response.to.have.status(200);",
               "    pm.expect(pm.response.json().balance).to.eql(900);",
-              "});"
-            ]
-          }
-        }
-      ]
-    },
-    {
-      "name": "Unknown account",
-      "request": {
-        "method": "GET",
-        "url": "http://localhost:8000/accounts/999/balance"
-      },
-      "event": [
-        {
-          "listen": "test",
-          "script": {
-            "type": "text/javascript",
-            "exec": [
-              "pm.test('Unknown account returns 404', function () {",
-              "    pm.response.to.have.status(404);",
               "});"
             ]
           }

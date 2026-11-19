@@ -75,3 +75,28 @@ def test_negative_payment():
     )
 
     assert response.status_code == 422
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        None,
+        {"account_id": "123", "amount": None},
+        {"account_id": "123", "amount": 0},
+        {"amount": 100},
+        {"account_id": "123"},
+    ],
+)
+def test_invalid_payment_payloads(payload):
+    response = client.post("/payments", json=payload)
+
+    assert response.status_code == 422
+
+
+def test_payment_amount_as_text():
+    response = client.post(
+        "/payments",
+        json={"account_id": "123", "amount": "not-a-number"}
+    )
+
+    assert response.status_code == 422
