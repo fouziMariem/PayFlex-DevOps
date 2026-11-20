@@ -1,6 +1,6 @@
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
-
+import time
 app = FastAPI(
     title="PayFlex API",
     description="API de services financiers",
@@ -28,6 +28,22 @@ def home():
 def health():
     return {"status": "healthy"}
 
+@app.get("/slow")
+def slow_endpoint():
+    time.sleep(0.7)  # Simule un délai de 700 ms
+    return {"status": "slow"}
+
+@app.get("/error")
+def error_endpoint():
+    raise HTTPException(
+        status_code=500,
+        detail="Simulated server error"
+    )
+
+@app.get("/medium")
+def medium_endpoint():
+    time.sleep(0.3)
+    return {"status": "medium"}
 
 @app.get("/accounts/{account_id}/balance")
 def get_balance(account_id: str):

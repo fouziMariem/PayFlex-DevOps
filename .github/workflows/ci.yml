@@ -3,15 +3,31 @@ name: PayFlex CI Pipeline
 on:
   push:
     branches: [main, master, develop]
+
   pull_request:
     branches: [main, master, develop]
+
   workflow_dispatch:
+    inputs:
+      scenario:
+        description: "Choose a DevOps test scenario"
+        required: true
+        type: choice
+        default: normal
+        options:
+          - normal
+          - coverage_warning
+          - coverage_critical
+          - unit_test_failure
+          - performance_warning
+          - performance_critical
+          - error_rate_critical
 
 permissions:
   contents: read
 
 jobs:
-  # 1. Unit tests, coverage and secrets detection
+  # 1. Unit tests and coverage
   quality:
     name: Quality Gate
     runs-on: ubuntu-latest
@@ -19,8 +35,6 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -32,15 +46,36 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      - name: Prepare simulated unit test failure
+        if: inputs.scenario == 'unit_test_failure'
+        run: |
+          cat > tests/test_pipeline_simulated_failure.py <<'EOF'
+          def test_simulated_failure():
+              assert 1 == 2
+          EOF
+
       - name: Run unit tests and coverage
+        env:
+          PYTEST_ADDOPTS: ${{ inputs.scenario == 'coverage_warning' && '-k "test_home or test_health or test_get_balance or test_account_not_found or test_successful_payment or test_insufficient_balance or test_payment_unknown_account"' || inputs.scenario == 'coverage_critical' && '-k test_home' || '' }}
         run: python scripts/quality_gate.py
+
+  # 2. Secret detection
+  security:
+    name: Secret Detection
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Detect secrets with Gitleaks
         uses: gitleaks/gitleaks-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  # 2. API integration tests
+  # 3. API integration tests
   integration:
     name: Integration Tests
     runs-on: ubuntu-latest
@@ -81,7 +116,7 @@ jobs:
         if: always()
         run: docker compose down
 
-  # 3. SonarQube static code analysis
+  # 4. SonarQube static analysis
   sonarqube:
     name: SonarQube Analysis
     runs-on: [self-hosted, Windows, X64]
@@ -117,7 +152,7 @@ jobs:
             sonarsource/sonar-scanner-cli `
             -D "sonar.qualitygate.wait=true"
 
-  # 4. Performance tests
+  # 5. Performance and error-rate tests
   performance:
     name: Performance Tests
     runs-on: ubuntu-latest
@@ -130,74 +165,104 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Start API
+      - name: Start API with Docker Compose
         run: docker compose up -d --build --wait
 
       - name: Run k6 performance test
         id: k6
         continue-on-error: true
+        env:
+          TEST_SCENARIO: ${{ inputs.scenario || 'normal' }}
         run: |
           docker run --rm \
             --network host \
+            -e TEST_SCENARIO="$TEST_SCENARIO" \
             -v "${{ github.workspace }}/performance:/scripts" \
-            grafana/k6:latest run /scripts/load_test_failure.js
-
-      - name: Report performance warning
-        if: steps.k6.outcome == 'failure'
-        run: echo "::warning::Performance tests failed. The pipeline will continue because this is a non-critical failure."
+            grafana/k6:latest run /scripts/load_test.js
 
       - name: Stop Docker Compose
         if: always()
         run: docker compose down
 
-  # 5. Incident report
+  # 6. Incident report and final classification
   incident-report:
     name: Incident Report
     runs-on: ubuntu-latest
-    needs: [quality, integration, sonarqube, performance]
+    needs:
+      - quality
+      - security
+      - integration
+      - sonarqube
+      - performance
     if: always()
 
     steps:
       - name: Generate incident report
         env:
+          SCENARIO: ${{ inputs.scenario || 'normal' }}
           QUALITY_RESULT: ${{ needs.quality.result }}
+          SECURITY_RESULT: ${{ needs.security.result }}
           INTEGRATION_RESULT: ${{ needs.integration.result }}
           SONAR_RESULT: ${{ needs.sonarqube.result }}
           PERFORMANCE_RESULT: ${{ needs.performance.outputs.performance-result }}
         run: |
           mkdir -p reports
 
+          CLASSIFICATION="SUCCESS"
+          PIPELINE_STATUS="SUCCESS"
+
+          if [ "$QUALITY_RESULT" = "failure" ] ||
+             [ "$QUALITY_RESULT" = "cancelled" ] ||
+             [ "$SECURITY_RESULT" = "failure" ] ||
+             [ "$SECURITY_RESULT" = "cancelled" ] ||
+             [ "$INTEGRATION_RESULT" = "failure" ] ||
+             [ "$SONAR_RESULT" = "failure" ] ||
+             [ "$SONAR_RESULT" = "cancelled" ] ||
+             [ "$QUALITY_RESULT" = "skipped" ] ||
+             [ "$SECURITY_RESULT" = "skipped" ] ||
+             [ "$INTEGRATION_RESULT" = "skipped" ] ||
+             [ "$SONAR_RESULT" = "skipped" ]; then
+            CLASSIFICATION="CRITICAL FAILURE"
+            PIPELINE_STATUS="FAILED"
+
+          elif [ "$SCENARIO" = "performance_critical" ] ||
+               [ "$SCENARIO" = "error_rate_critical" ]; then
+            if [ "$PERFORMANCE_RESULT" = "failure" ]; then
+              CLASSIFICATION="CRITICAL PERFORMANCE FAILURE"
+              PIPELINE_STATUS="FAILED"
+            fi
+
+          elif [ "$SCENARIO" = "coverage_warning" ] ||
+               [ "$SCENARIO" = "performance_warning" ]; then
+            CLASSIFICATION="WARNING"
+            PIPELINE_STATUS="WARNING"
+          fi
+
           {
             echo "PayFlex CI Pipeline - Execution Report"
             echo "Date: $(date -u)"
+            echo "Selected scenario: $SCENARIO"
             echo ""
             echo "Quality Gate: $QUALITY_RESULT"
+            echo "Secret Detection: $SECURITY_RESULT"
             echo "Integration Tests: $INTEGRATION_RESULT"
             echo "SonarQube Analysis: $SONAR_RESULT"
-            echo "Performance Tests: $PERFORMANCE_RESULT"
+            echo "Performance Tests: ${PERFORMANCE_RESULT:-not executed}"
             echo ""
-
-            if [ "$QUALITY_RESULT" = "failure" ] || \
-               [ "$INTEGRATION_RESULT" = "failure" ] || \
-               [ "$SONAR_RESULT" = "failure" ] || \
-               [ "$QUALITY_RESULT" = "skipped" ] || \
-               [ "$INTEGRATION_RESULT" = "skipped" ] || \
-               [ "$SONAR_RESULT" = "skipped" ]; then
-              echo "Classification: CRITICAL FAILURE"
-              echo "Pipeline status: FAILED"
-            elif [ "$PERFORMANCE_RESULT" = "failure" ]; then
-              echo "Classification: NON-CRITICAL FAILURE"
-              echo "Pipeline status: WARNING"
-            else
-              echo "Classification: NO FAILURE DETECTED"
-              echo "Pipeline status: SUCCESS"
-            fi
+            echo "Classification: $CLASSIFICATION"
+            echo "Pipeline status: $PIPELINE_STATUS"
           } > reports/incident-report.txt
 
           cat reports/incident-report.txt
 
+          if [ "$PIPELINE_STATUS" = "FAILED" ]; then
+            exit 1
+          fi
+
       - name: Upload incident report
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: incident-report
           path: reports/incident-report.txt
+          if-no-files-found: warn
