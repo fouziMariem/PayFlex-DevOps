@@ -142,7 +142,7 @@ jobs:
             if [ "$QUALITY_RESULT" = "failure" ] || [ "$INTEGRATION_RESULT" = "failure" ]; then
               echo "Classification: CRITICAL FAILURE"
               echo "Pipeline status: FAILED"
-            elif [ "$PERFORMANCE_RESULT" = "failure" ]; then
+            elif [ "$K6_OUTCOME" = "failure" ]; then
               echo "Classification: NON-CRITICAL FAILURE"
               echo "Pipeline status: WARNING"
             else
