@@ -86,8 +86,9 @@ jobs:
     name: Performance Tests
     runs-on: ubuntu-latest
     needs: integration
+
     outputs:
-      k6-outcome: ${{ steps.k6.outcome }}
+      performance-result: ${{ steps.k6.outcome }}
 
     steps:
       - name: Checkout repository
@@ -96,7 +97,7 @@ jobs:
       - name: Start API
         run: docker compose up -d --build --wait
 
-      - name: Run k6 load test
+      - name: Run k6 performance test
         id: k6
         continue-on-error: true
         run: |
@@ -107,13 +108,13 @@ jobs:
 
       - name: Report performance warning
         if: steps.k6.outcome == 'failure'
-        run: echo "::warning::Performance tests failed. Check the k6 thresholds and report."
+        run: echo "::warning::Performance tests failed. The pipeline will continue because this is a non-critical failure."
 
       - name: Stop Docker Compose
         if: always()
         run: docker compose down
 
-  # 4. Incident report when a critical job fails
+  # 4. Incident report
   incident-report:
     name: Incident Report
     runs-on: ubuntu-latest
@@ -125,8 +126,7 @@ jobs:
         env:
           QUALITY_RESULT: ${{ needs.quality.result }}
           INTEGRATION_RESULT: ${{ needs.integration.result }}
-          PERFORMANCE_RESULT: ${{ needs.performance.result }}
-          K6_OUTCOME: ${{ needs.performance.outputs.k6-outcome }}
+          PERFORMANCE_RESULT: ${{ needs.performance.outputs.performance-result }}
         run: |
           mkdir -p reports
 
@@ -142,11 +142,15 @@ jobs:
             if [ "$QUALITY_RESULT" = "failure" ] || [ "$INTEGRATION_RESULT" = "failure" ]; then
               echo "Classification: CRITICAL FAILURE"
               echo "Pipeline status: FAILED"
-            elif [ "$K6_OUTCOME" = "failure" ]; then
+            elif [ "$QUALITY_RESULT" = "skipped" ] || [ "$INTEGRATION_RESULT" = "skipped" ]; then
+              echo "Classification: CRITICAL FAILURE"
+              echo "Pipeline status: FAILED"
+            elif [ "$PERFORMANCE_RESULT" = "failure" ]; then
               echo "Classification: NON-CRITICAL FAILURE"
               echo "Pipeline status: WARNING"
             else
               echo "Classification: NO FAILURE DETECTED"
+              echo "Pipeline status: SUCCESS"
             fi
           } > reports/incident-report.txt
 
