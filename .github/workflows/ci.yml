@@ -93,15 +93,13 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
+      - name: Check Python installation
+        run: python --version
 
       - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          python -m pip install -r requirements.txt
 
       - name: Generate coverage report
         run: |
@@ -117,7 +115,7 @@ jobs:
             -e SONAR_TOKEN="$env:SONAR_TOKEN" `
             -v "${{ github.workspace }}:/usr/src" `
             sonarsource/sonar-scanner-cli `
-            -Dsonar.qualitygate.wait=true
+            -D "sonar.qualitygate.wait=true"
 
   # 4. Performance tests
   performance:
