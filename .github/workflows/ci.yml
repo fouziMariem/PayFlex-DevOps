@@ -126,6 +126,7 @@ jobs:
           QUALITY_RESULT: ${{ needs.quality.result }}
           INTEGRATION_RESULT: ${{ needs.integration.result }}
           PERFORMANCE_RESULT: ${{ needs.performance.result }}
+          K6_OUTCOME: ${{ needs.performance.outputs.k6-outcome }}
         run: |
           mkdir -p reports
 
