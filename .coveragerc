@@ -1,0 +1,10 @@
+
+[run]
+relative_files = True
+source = app
+
+[report]
+omit =
+    */__pycache__/*
+    */venv/*
+    */tests/*
